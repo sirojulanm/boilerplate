@@ -1,4 +1,4 @@
-# opencodeproject
+# boilerplate
 
 Project Go sederhana dengan **health check endpoint** dan **Swagger UI**, disusun
 memakai clean architecture berbasis interface.
@@ -26,7 +26,7 @@ Contoh respons:
 ```json
 {
   "status": "ok",
-  "service": "opencodeproject",
+  "service": "boilerplate",
   "version": "1.0.0",
   "timestamp": "2026-10-27T15:19:04Z",
   "checks": [
@@ -102,7 +102,7 @@ Catatan: belum ada rotasi file. Untuk produksi, tambahkan rotasi (misalnya
 ```bash
 make docs     # regenerate docs/ dari anotasi (swag v1.16.6)
 make test     # jalankan semua unit test + coverage
-make build    # build binary ke bin/opencodeproject
+make build    # build binary ke bin/boilerplate
 make tidy     # go mod tidy
 ```
 

@@ -8,20 +8,24 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	"github.com/sirojulanam/opencodeproject/internal/domain"
+	"github.com/sirojulanam/boilerplate/internal/domain"
 	"github.com/sirupsen/logrus"
 )
+
+func newBufferedLogger() (*logrus.Logger, *bytes.Buffer) {
+	buffer := &bytes.Buffer{}
+	log := logrus.New()
+	log.SetOutput(buffer)
+	log.SetFormatter(&logrus.JSONFormatter{})
+	return log, buffer
+}
 
 func TestMiddlewareLogsEveryRequest(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	var buffer bytes.Buffer
-	log := logrus.New()
-	log.SetOutput(&buffer)
-	log.SetFormatter(&logrus.JSONFormatter{})
-
+	log, buffer := newBufferedLogger()
 	router := NewRouter(NewHealthHandler(stubHealth{result: domain.Health{Status: domain.StatusOK}}), log)
-	router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/api/v1/health", nil))
+	router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, HealthPath, nil))
 
 	var entry map[string]any
 	if err := json.Unmarshal(buffer.Bytes(), &entry); err != nil {
@@ -31,8 +35,8 @@ func TestMiddlewareLogsEveryRequest(t *testing.T) {
 	if entry["msg"] != "http request" {
 		t.Fatalf("msg = %v, want http request", entry["msg"])
 	}
-	if entry["path"] != "/api/v1/health" {
-		t.Fatalf("path = %v, want /api/v1/health", entry["path"])
+	if entry["path"] != HealthPath {
+		t.Fatalf("path = %v, want %s", entry["path"], HealthPath)
 	}
 	if entry["method"] != http.MethodGet {
 		t.Fatalf("method = %v, want GET", entry["method"])
@@ -45,11 +49,7 @@ func TestMiddlewareLogsEveryRequest(t *testing.T) {
 func TestMiddlewareLogsNotFoundAsWarn(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	var buffer bytes.Buffer
-	log := logrus.New()
-	log.SetOutput(&buffer)
-	log.SetFormatter(&logrus.JSONFormatter{})
-
+	log, buffer := newBufferedLogger()
 	router := NewRouter(NewHealthHandler(stubHealth{result: domain.Health{Status: domain.StatusOK}}), log)
 	router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/does-not-exist", nil))
 

@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/sirojulanam/opencodeproject/internal/domain"
+	"github.com/sirojulanam/boilerplate/internal/domain"
 )
 
 type fakeChecker struct {

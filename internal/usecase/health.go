@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/sirojulanam/opencodeproject/internal/domain"
+	"github.com/sirojulanam/boilerplate/internal/domain"
 )
 
 // Health is the application behaviour for health reporting. Delivery layers
@@ -31,29 +31,15 @@ func NewHealth(service, version string, checkers ...domain.Checker) Health {
 	}
 }
 
-// Check probes every registered checker and aggregates the results.
+// Check probes every registered checker and lets the domain derive the
+// aggregate status from the results.
 func (s *healthService) Check(ctx context.Context) domain.Health {
 	checks := make([]domain.Check, 0, len(s.checkers))
-	status := domain.StatusOK
 
 	for _, checker := range s.checkers {
 		detail, err := checker.Check(ctx)
-		result := domain.Check{Name: checker.Name(), Status: "up", Detail: detail}
-
-		if err != nil {
-			result.Status = "down"
-			result.Detail = err.Error()
-			status = domain.StatusDegraded
-		}
-
-		checks = append(checks, result)
+		checks = append(checks, domain.NewCheck(checker.Name(), detail, err))
 	}
 
-	return domain.Health{
-		Status:    status,
-		Service:   s.service,
-		Version:   s.version,
-		Timestamp: s.now().UTC(),
-		Checks:    checks,
-	}
+	return domain.NewHealth(s.service, s.version, s.now(), checks)
 }

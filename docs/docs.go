@@ -55,10 +55,25 @@ const docTemplate = `{
                     "example": "runtime"
                 },
                 "status": {
-                    "type": "string",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/domain.CheckStatus"
+                        }
+                    ],
                     "example": "up"
                 }
             }
+        },
+        "domain.CheckStatus": {
+            "type": "string",
+            "enum": [
+                "up",
+                "down"
+            ],
+            "x-enum-varnames": [
+                "CheckUp",
+                "CheckDown"
+            ]
         },
         "domain.Health": {
             "type": "object",
@@ -71,7 +86,7 @@ const docTemplate = `{
                 },
                 "service": {
                     "type": "string",
-                    "example": "opencodeproject"
+                    "example": "boilerplate"
                 },
                 "status": {
                     "allOf": [
@@ -111,7 +126,7 @@ var SwaggerInfo = &swag.Spec{
 	Host:             "localhost:1111",
 	BasePath:         "/api/v1",
 	Schemes:          []string{"http"},
-	Title:            "OpenCode Project API",
+	Title:            "Boilerplate API",
 	Description:      "Simple health-check API built with a clean, interface-driven architecture.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,

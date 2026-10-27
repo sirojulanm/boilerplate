@@ -9,9 +9,18 @@ definitions:
         example: runtime
         type: string
       status:
+        allOf:
+        - $ref: '#/definitions/domain.CheckStatus'
         example: up
-        type: string
     type: object
+  domain.CheckStatus:
+    enum:
+    - up
+    - down
+    type: string
+    x-enum-varnames:
+    - CheckUp
+    - CheckDown
   domain.Health:
     properties:
       checks:
@@ -19,7 +28,7 @@ definitions:
           $ref: '#/definitions/domain.Check'
         type: array
       service:
-        example: opencodeproject
+        example: boilerplate
         type: string
       status:
         allOf:
@@ -44,7 +53,7 @@ host: localhost:1111
 info:
   contact: {}
   description: Simple health-check API built with a clean, interface-driven architecture.
-  title: OpenCode Project API
+  title: Boilerplate API
   version: "1.0"
 paths:
   /health:

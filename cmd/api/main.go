@@ -12,19 +12,19 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	_ "github.com/sirojulanam/opencodeproject/docs"
-	"github.com/sirojulanam/opencodeproject/internal/delivery/httpapi"
-	"github.com/sirojulanam/opencodeproject/internal/infrastructure/checker"
-	"github.com/sirojulanam/opencodeproject/internal/infrastructure/logger"
-	"github.com/sirojulanam/opencodeproject/internal/usecase"
+	_ "github.com/sirojulanam/boilerplate/docs"
+	"github.com/sirojulanam/boilerplate/internal/delivery/httpapi"
+	"github.com/sirojulanam/boilerplate/internal/infrastructure/checker"
+	"github.com/sirojulanam/boilerplate/internal/infrastructure/logger"
+	"github.com/sirojulanam/boilerplate/internal/usecase"
 )
 
 const (
-	serviceName = "opencodeproject"
+	serviceName = "boilerplate"
 	version     = "1.0.0"
 )
 
-// @title           OpenCode Project API
+// @title           Boilerplate API
 // @version         1.0
 // @description     Simple health-check API built with a clean, interface-driven architecture.
 // @schemes         http

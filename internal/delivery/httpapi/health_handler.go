@@ -4,8 +4,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/sirojulanam/opencodeproject/internal/domain"
-	"github.com/sirojulanam/opencodeproject/internal/usecase"
+	"github.com/sirojulanam/boilerplate/internal/usecase"
 )
 
 // HealthHandler exposes the health usecase over HTTP using Gin.
@@ -30,7 +29,7 @@ func (h *HealthHandler) Check(c *gin.Context) {
 	health := h.usecase.Check(c.Request.Context())
 
 	status := http.StatusOK
-	if health.Status != domain.StatusOK {
+	if !health.Status.IsHealthy() {
 		status = http.StatusServiceUnavailable
 	}
 

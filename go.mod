@@ -1,4 +1,4 @@
-module github.com/sirojulanam/opencodeproject
+module github.com/sirojulanam/boilerplate
 
 go 1.24.0
 
