@@ -1,0 +1,103 @@
+{
+    "schemes": [
+        "http"
+    ],
+    "swagger": "2.0",
+    "info": {
+        "description": "Simple health-check API built with a clean, interface-driven architecture.",
+        "title": "OpenCode Project API",
+        "contact": {},
+        "version": "1.0"
+    },
+    "host": "localhost:1111",
+    "basePath": "/api/v1",
+    "paths": {
+        "/health": {
+            "get": {
+                "description": "Returns the current health of the service and its dependencies.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "health"
+                ],
+                "summary": "Health check",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.Health"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/domain.Health"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "domain.Check": {
+            "type": "object",
+            "properties": {
+                "detail": {
+                    "type": "string",
+                    "example": "uptime=1h2m3s"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "runtime"
+                },
+                "status": {
+                    "type": "string",
+                    "example": "up"
+                }
+            }
+        },
+        "domain.Health": {
+            "type": "object",
+            "properties": {
+                "checks": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.Check"
+                    }
+                },
+                "service": {
+                    "type": "string",
+                    "example": "opencodeproject"
+                },
+                "status": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/domain.Status"
+                        }
+                    ],
+                    "example": "ok"
+                },
+                "timestamp": {
+                    "type": "string",
+                    "example": "2026-10-27T22:00:00Z"
+                },
+                "version": {
+                    "type": "string",
+                    "example": "1.0.0"
+                }
+            }
+        },
+        "domain.Status": {
+            "type": "string",
+            "enum": [
+                "ok",
+                "degraded"
+            ],
+            "x-enum-varnames": [
+                "StatusOK",
+                "StatusDegraded"
+            ]
+        }
+    }
+}
