@@ -1,0 +1,7 @@
+.git
+.github
+bin/
+logs/*.log
+coverage.out
+*.md
+.DS_Store

@@ -4,51 +4,59 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"runtime/debug"
 
 	"github.com/gin-gonic/gin"
+	"github.com/sirojulanam/boilerplate/internal/constant"
 	"github.com/sirupsen/logrus"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
-const (
-	// HealthPath is the public health-check route.
-	HealthPath = "/api/v1/health"
-	// SwaggerPath serves the embedded Swagger UI.
-	SwaggerPath = "/swagger/*any"
-	// SwaggerUIPath is the Swagger UI entry page.
-	SwaggerUIPath = "/swagger/index.html"
-)
-
-// NewRouter wires every HTTP route of the service. All output, including Gin's
-// own writers, is routed through the provided logrus logger.
-func NewRouter(health *HealthHandler, log *logrus.Logger) *gin.Engine {
-	if os.Getenv(gin.EnvGinMode) == "" && gin.Mode() == gin.DebugMode {
+// Configure applies process-wide Gin settings. It must be called once from the
+// composition root before NewRouter. Keeping this out of NewRouter avoids
+// hidden global state in tests and library code.
+func Configure(log *logrus.Logger) {
+	if os.Getenv(gin.EnvGinMode) == "" {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
 	gin.DefaultWriter = log.WriterLevel(logrus.InfoLevel)
 	gin.DefaultErrorWriter = log.WriterLevel(logrus.ErrorLevel)
+}
 
+// NewRouter wires every HTTP route of the service.
+func NewRouter(health *HealthHandler, log *logrus.Logger) *gin.Engine {
 	router := gin.New()
 	router.HandleMethodNotAllowed = true
-	router.Use(gin.CustomRecovery(func(c *gin.Context, recovered any) {
-		log.WithField("panic", fmt.Sprint(recovered)).Error("panic recovered")
-		c.AbortWithStatusJSON(http.StatusInternalServerError, ErrorResponse{Error: "internal server error"})
-	}))
-	router.Use(withLogging(log))
 
-	router.GET(HealthPath, health.Check)
-	router.GET(SwaggerPath, ginSwagger.WrapHandler(swaggerFiles.Handler))
+	// Order matters: the request ID is available to the logger, and the
+	// recovery middleware sits inside the logger so the access log still runs
+	// after a recovered panic.
+	router.Use(
+		withRequestID(),
+		withLogging(log),
+		gin.CustomRecoveryWithWriter(nil, func(c *gin.Context, recovered any) {
+			log.WithFields(logrus.Fields{
+				"panic":      fmt.Sprint(recovered),
+				"stack":      string(debug.Stack()),
+				"request_id": c.GetString(constant.RequestIDKey),
+			}).Error("panic recovered")
+			c.AbortWithStatusJSON(http.StatusInternalServerError, ErrorResponse{Error: constant.ErrInternalServer})
+		}),
+	)
+
+	router.GET(constant.HealthPath, health.Check)
+	router.GET(constant.SwaggerPath, ginSwagger.WrapHandler(swaggerFiles.Handler))
 	router.GET("/", func(c *gin.Context) {
-		c.Redirect(http.StatusTemporaryRedirect, SwaggerUIPath)
+		c.Redirect(http.StatusTemporaryRedirect, constant.SwaggerUIPath)
 	})
 
 	router.NoRoute(func(c *gin.Context) {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: "route not found"})
+		c.JSON(http.StatusNotFound, ErrorResponse{Error: constant.ErrRouteNotFound})
 	})
 	router.NoMethod(func(c *gin.Context) {
-		c.JSON(http.StatusMethodNotAllowed, ErrorResponse{Error: "method not allowed"})
+		c.JSON(http.StatusMethodNotAllowed, ErrorResponse{Error: constant.ErrMethodNotAllowed})
 	})
 
 	return router

@@ -127,7 +127,7 @@ var SwaggerInfo = &swag.Spec{
 	BasePath:         "/api/v1",
 	Schemes:          []string{"http"},
 	Title:            "Boilerplate API",
-	Description:      "Simple health-check API built with a clean, interface-driven architecture.",
+	Description:      "Generic health-check API template built with a clean, interface-driven architecture.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

@@ -1,7 +1,9 @@
 package domain_test
 
 import (
+	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -39,8 +41,26 @@ func TestNewHealthDegradedWhenAnyCheckFails(t *testing.T) {
 	}
 
 	failed := health.Checks[1]
-	if failed.Status != domain.CheckDown || failed.Detail != "connection refused" {
+	if failed.Status != domain.CheckDown || failed.Detail != "unavailable" {
 		t.Fatalf("unexpected failing check: %+v", failed)
+	}
+	if failed.Err == nil || failed.Err.Error() != "connection refused" {
+		t.Fatalf("probe error not preserved for logging: %+v", failed.Err)
+	}
+}
+
+func TestCheckErrorIsNotSerialized(t *testing.T) {
+	check := domain.NewCheck("database", "", errors.New("password=secret"))
+
+	payload, err := json.Marshal(check)
+	if err != nil {
+		t.Fatalf("marshal check: %v", err)
+	}
+	if strings.Contains(string(payload), "password=secret") {
+		t.Fatalf("serialized check leaked internal error: %s", payload)
+	}
+	if !strings.Contains(string(payload), `"detail":"unavailable"`) {
+		t.Fatalf("serialized check missing safe detail: %s", payload)
 	}
 }
 

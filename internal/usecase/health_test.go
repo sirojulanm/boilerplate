@@ -48,7 +48,10 @@ func TestHealthCheckReportsDegraded(t *testing.T) {
 	if got.Status != domain.StatusDegraded {
 		t.Fatalf("status = %q, want %q", got.Status, domain.StatusDegraded)
 	}
-	if got.Checks[1].Status != "down" || got.Checks[1].Detail != "connection refused" {
+	if got.Checks[1].Status != "down" || got.Checks[1].Detail != "unavailable" {
 		t.Fatalf("unexpected failing check: %+v", got.Checks[1])
+	}
+	if got.Checks[1].Err == nil {
+		t.Fatal("probe error must be preserved for logging")
 	}
 }

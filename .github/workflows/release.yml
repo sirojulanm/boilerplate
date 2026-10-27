@@ -38,9 +38,11 @@ jobs:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: "0"
+          VERSION: ${{ github.ref_name }}
         run: |
+          version="${VERSION#v}"
           mkdir -p dist
-          go build -trimpath -ldflags="-s -w" \
+          go build -trimpath -ldflags="-s -w -X main.version=${version}" \
             -o "dist/boilerplate-${GOOS}-${GOARCH}" ./cmd/api
 
       - name: Upload artifact

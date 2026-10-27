@@ -52,7 +52,8 @@ definitions:
 host: localhost:1111
 info:
   contact: {}
-  description: Simple health-check API built with a clean, interface-driven architecture.
+  description: Generic health-check API template built with a clean, interface-driven
+    architecture.
   title: Boilerplate API
   version: "1.0"
 paths:

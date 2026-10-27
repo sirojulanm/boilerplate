@@ -35,6 +35,9 @@ type Check struct {
 	Name   string      `json:"name" example:"runtime"`
 	Status CheckStatus `json:"status" example:"up"`
 	Detail string      `json:"detail,omitempty" example:"uptime=1h2m3s"`
+	// Err carries the internal probe failure for logging. It is excluded from
+	// the JSON response so infrastructure details never leak to API clients.
+	Err error `json:"-"`
 }
 
 // Healthy reports whether this check passed.
@@ -76,10 +79,11 @@ func NewHealth(service, version string, at time.Time, checks []Check) Health {
 	}
 }
 
-// NewCheck translates a probe result into a domain check.
+// NewCheck translates a probe result into a domain check. Probe errors are kept
+// for logging but replaced with a safe detail in the public response.
 func NewCheck(name, detail string, err error) Check {
 	if err != nil {
-		return Check{Name: name, Status: CheckDown, Detail: err.Error()}
+		return Check{Name: name, Status: CheckDown, Detail: "unavailable", Err: err}
 	}
 	return Check{Name: name, Status: CheckUp, Detail: detail}
 }

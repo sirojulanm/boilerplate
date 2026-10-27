@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/sirojulanam/boilerplate/internal/constant"
 	"github.com/sirupsen/logrus"
 )
 
@@ -29,13 +30,13 @@ type Logger struct {
 // New builds a JSON logger that writes to both stdout and Dir/Filename.
 func New(cfg Config) (*Logger, error) {
 	if cfg.Level == "" {
-		cfg.Level = "info"
+		cfg.Level = constant.DefaultLogLevel
 	}
 	if cfg.Dir == "" {
-		cfg.Dir = "logs"
+		cfg.Dir = constant.DefaultLogDir
 	}
 	if cfg.Filename == "" {
-		cfg.Filename = "app.log"
+		cfg.Filename = constant.DefaultLogFilename
 	}
 
 	level, err := logrus.ParseLevel(cfg.Level)
