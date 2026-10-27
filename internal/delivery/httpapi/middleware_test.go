@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -40,31 +41,80 @@ func decodeEntries(t *testing.T, buffer *bytes.Buffer) []map[string]any {
 	return entries
 }
 
-func TestMiddlewareLogsEveryRequest(t *testing.T) {
+func middlewareEntries(t *testing.T, buffer *bytes.Buffer) []map[string]any {
+	t.Helper()
+
+	entries := make([]map[string]any, 0)
+	for _, entry := range decodeEntries(t, buffer) {
+		switch entry["event"] {
+		case constant.LogEventRequest, constant.LogEventResponse:
+			entries = append(entries, entry)
+		}
+	}
+	return entries
+}
+
+func TestMiddlewareLogsRequestThenResponse(t *testing.T) {
 	log, buffer := newBufferedLogger()
 	router := newRouterWithLogger(stubHealth{result: domain.Health{Status: domain.StatusOK}}, log)
 	router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, constant.HealthPath, nil))
 
-	entries := decodeEntries(t, buffer)
-	if len(entries) != 1 {
-		t.Fatalf("log entries = %d, want 1: %s", len(entries), buffer.String())
+	entries := middlewareEntries(t, buffer)
+	if len(entries) != 2 {
+		t.Fatalf("middleware entries = %d, want 2: %s", len(entries), buffer.String())
 	}
-	entry := entries[0]
 
-	if entry["msg"] != "http request" {
-		t.Fatalf("msg = %v, want http request", entry["msg"])
+	request, response := entries[0], entries[1]
+	if request["event"] != constant.LogEventRequest || request["msg"] != "request received" {
+		t.Fatalf("first entry is not the request log: %v", request)
 	}
-	if entry["path"] != constant.HealthPath {
-		t.Fatalf("path = %v, want %s", entry["path"], constant.HealthPath)
+	if response["event"] != constant.LogEventResponse || response["msg"] != "response sent" {
+		t.Fatalf("second entry is not the response log: %v", response)
 	}
-	if entry["method"] != http.MethodGet {
-		t.Fatalf("method = %v, want GET", entry["method"])
+	if request["request_id"] != response["request_id"] {
+		t.Fatalf("request/response ids differ: %v vs %v", request["request_id"], response["request_id"])
 	}
-	if entry["status"] != float64(http.StatusOK) {
-		t.Fatalf("status = %v, want %d", entry["status"], http.StatusOK)
+
+	if response["path"] != constant.HealthPath {
+		t.Fatalf("path = %v, want %s", response["path"], constant.HealthPath)
 	}
-	if entry["request_id"] == "" {
-		t.Fatal("request_id must be present in the access log")
+	if response["method"] != http.MethodGet {
+		t.Fatalf("method = %v, want GET", response["method"])
+	}
+	if response["status"] != float64(http.StatusOK) {
+		t.Fatalf("status = %v, want %d", response["status"], http.StatusOK)
+	}
+	if response["latency_ms"] == nil {
+		t.Fatal("response log must include latency_ms")
+	}
+	if response["bytes_written"] == nil {
+		t.Fatal("response log must include bytes_written")
+	}
+}
+
+func TestMiddlewareKeepsRequestProcessResponseOrder(t *testing.T) {
+	log, buffer := newBufferedLogger()
+	router := newRouterWithLogger(stubHealth{result: domain.Health{
+		Status: domain.StatusOK,
+		Checks: []domain.Check{domain.NewCheck("runtime", "uptime=1s", nil)},
+	}}, log)
+
+	router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, constant.HealthPath, nil))
+
+	entries := decodeEntries(t, buffer)
+	events := make([]string, 0, len(entries))
+	requestIDs := make(map[string]struct{}, len(entries))
+	for _, entry := range entries {
+		events = append(events, entry["event"].(string))
+		requestIDs[entry["request_id"].(string)] = struct{}{}
+	}
+
+	want := []string{constant.LogEventRequest, constant.LogEventProcess, constant.LogEventProcess, constant.LogEventResponse}
+	if !reflect.DeepEqual(events, want) {
+		t.Fatalf("event order = %v, want %v: %s", events, want, buffer.String())
+	}
+	if len(requestIDs) != 1 {
+		t.Fatalf("log entries must share one request id, got %v", requestIDs)
 	}
 }
 
@@ -73,16 +123,17 @@ func TestMiddlewareLogsNotFoundAsWarn(t *testing.T) {
 	router := newRouterWithLogger(stubHealth{result: domain.Health{Status: domain.StatusOK}}, log)
 	router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/does-not-exist", nil))
 
-	entries := decodeEntries(t, buffer)
-	if len(entries) != 1 {
-		t.Fatalf("log entries = %d, want 1: %s", len(entries), buffer.String())
+	entries := middlewareEntries(t, buffer)
+	if len(entries) != 2 {
+		t.Fatalf("middleware entries = %d, want 2: %s", len(entries), buffer.String())
 	}
 
-	if entries[0]["level"] != "warning" {
-		t.Fatalf("level = %v, want warning", entries[0]["level"])
+	response := entries[1]
+	if response["level"] != "warning" {
+		t.Fatalf("level = %v, want warning", response["level"])
 	}
-	if entries[0]["status"] != float64(http.StatusNotFound) {
-		t.Fatalf("status = %v, want %d", entries[0]["status"], http.StatusNotFound)
+	if response["status"] != float64(http.StatusNotFound) {
+		t.Fatalf("status = %v, want %d", response["status"], http.StatusNotFound)
 	}
 }
 
@@ -99,12 +150,10 @@ func TestMiddlewarePropagatesIncomingRequestID(t *testing.T) {
 		t.Fatalf("%s = %q, want trace-123", constant.RequestIDHeader, got)
 	}
 
-	entries := decodeEntries(t, buffer)
-	if len(entries) != 1 {
-		t.Fatalf("log entries = %d, want 1: %s", len(entries), buffer.String())
-	}
-	if entries[0]["request_id"] != "trace-123" {
-		t.Fatalf("request_id = %v, want trace-123", entries[0]["request_id"])
+	for _, entry := range middlewareEntries(t, buffer) {
+		if entry["request_id"] != "trace-123" {
+			t.Fatalf("request_id = %v, want trace-123", entry["request_id"])
+		}
 	}
 }
 
@@ -120,12 +169,31 @@ func TestMiddlewareGeneratesRequestID(t *testing.T) {
 		t.Fatalf("%s header must be set", constant.RequestIDHeader)
 	}
 
-	entries := decodeEntries(t, buffer)
-	if len(entries) != 1 {
-		t.Fatalf("log entries = %d, want 1: %s", len(entries), buffer.String())
+	for _, entry := range middlewareEntries(t, buffer) {
+		if entry["request_id"] != id {
+			t.Fatalf("request_id = %v, want %s", entry["request_id"], id)
+		}
 	}
-	if entries[0]["request_id"] != id {
-		t.Fatalf("request_id = %v, want %s", entries[0]["request_id"], id)
+}
+
+func TestMiddlewareReplacesOversizedRequestID(t *testing.T) {
+	log, buffer := newBufferedLogger()
+	router := newRouterWithLogger(stubHealth{result: domain.Health{Status: domain.StatusOK}}, log)
+
+	request := httptest.NewRequest(http.MethodGet, constant.HealthPath, nil)
+	request.Header.Set(constant.RequestIDHeader, strings.Repeat("x", maxRequestIDLength+1))
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+
+	id := response.Header().Get(constant.RequestIDHeader)
+	if id == strings.Repeat("x", maxRequestIDLength+1) || id == "" {
+		t.Fatalf("oversized request id was not replaced: %q", id)
+	}
+
+	for _, entry := range middlewareEntries(t, buffer) {
+		if entry["request_id"] != id {
+			t.Fatalf("request_id = %v, want %s", entry["request_id"], id)
+		}
 	}
 }
 
@@ -144,13 +212,13 @@ func TestPanicIsRecoveredAndLogged(t *testing.T) {
 		t.Fatalf("status code = %d, want %d", response.Code, http.StatusInternalServerError)
 	}
 
-	var panicEntry, accessEntry map[string]any
+	var panicEntry, responseEntry map[string]any
 	for _, entry := range decodeEntries(t, buffer) {
 		switch entry["msg"] {
 		case "panic recovered":
 			panicEntry = entry
-		case "http request":
-			accessEntry = entry
+		case "response sent":
+			responseEntry = entry
 		}
 	}
 
@@ -161,10 +229,10 @@ func TestPanicIsRecoveredAndLogged(t *testing.T) {
 		t.Fatal("panic log must include a stack trace")
 	}
 
-	if accessEntry == nil {
-		t.Fatalf("access log missing after panic: %s", buffer.String())
+	if responseEntry == nil {
+		t.Fatalf("response log missing after panic: %s", buffer.String())
 	}
-	if accessEntry["status"] != float64(http.StatusInternalServerError) {
-		t.Fatalf("access log status = %v, want %d", accessEntry["status"], http.StatusInternalServerError)
+	if responseEntry["status"] != float64(http.StatusInternalServerError) {
+		t.Fatalf("response log status = %v, want %d", responseEntry["status"], http.StatusInternalServerError)
 	}
 }

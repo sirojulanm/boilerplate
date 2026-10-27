@@ -49,14 +49,214 @@ definitions:
     x-enum-varnames:
     - StatusOK
     - StatusDegraded
+  domain.User:
+    properties:
+      created_at:
+        example: "2026-10-27T22:00:00Z"
+        type: string
+      email:
+        example: jane@example.com
+        type: string
+      id:
+        example: 6f1c3a2b-6a2f-4f7c-9d0d-3b8c0f0f0f0f
+        type: string
+      name:
+        example: Jane Doe
+        type: string
+      updated_at:
+        example: "2026-10-27T22:00:00Z"
+        type: string
+    type: object
+  httpapi.ErrorBody:
+    properties:
+      code:
+        example: invalid_credentials
+        type: string
+      message:
+        example: invalid email or password
+        type: string
+    type: object
+  httpapi.ErrorResponse:
+    properties:
+      error:
+        $ref: '#/definitions/httpapi.ErrorBody'
+      request_id:
+        example: 7f3a9c1d2e4b5a6f
+        type: string
+      success:
+        example: false
+        type: boolean
+    type: object
+  httpapi.HealthResponse:
+    properties:
+      data:
+        $ref: '#/definitions/domain.Health'
+      request_id:
+        example: 7f3a9c1d2e4b5a6f
+        type: string
+      success:
+        example: true
+        type: boolean
+    type: object
+  httpapi.RegisterRequest:
+    properties:
+      email:
+        example: jane@example.com
+        type: string
+      name:
+        example: Jane Doe
+        type: string
+      password:
+        example: correct-horse-battery
+        type: string
+    type: object
+  httpapi.TokenData:
+    properties:
+      access_token:
+        example: eyJhbGciOiJIUzI1NiIs...
+        type: string
+      expires_at:
+        example: "2026-10-27T23:00:00Z"
+        type: string
+      expires_in:
+        example: 3600
+        type: integer
+      token_type:
+        example: Bearer
+        type: string
+      user:
+        $ref: '#/definitions/domain.User'
+    type: object
+  httpapi.TokenRequest:
+    properties:
+      email:
+        example: jane@example.com
+        type: string
+      password:
+        example: correct-horse-battery
+        type: string
+    type: object
+  httpapi.TokenResponse:
+    properties:
+      data:
+        $ref: '#/definitions/httpapi.TokenData'
+      request_id:
+        example: 7f3a9c1d2e4b5a6f
+        type: string
+      success:
+        example: true
+        type: boolean
+    type: object
+  httpapi.UserResponse:
+    properties:
+      data:
+        $ref: '#/definitions/domain.User'
+      request_id:
+        example: 7f3a9c1d2e4b5a6f
+        type: string
+      success:
+        example: true
+        type: boolean
+    type: object
 host: localhost:1111
 info:
   contact: {}
-  description: Generic health-check API template built with a clean, interface-driven
-    architecture.
+  description: Generic PostgreSQL-backed API template with JWT authentication, health
+    checks, and structured logging.
   title: Boilerplate API
   version: "1.0"
 paths:
+  /auth/me:
+    get:
+      description: Returns the account identified by the Bearer token.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/httpapi.UserResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/httpapi.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httpapi.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Current user
+      tags:
+      - auth
+  /auth/register:
+    post:
+      consumes:
+      - application/json
+      description: Creates an account with a bcrypt-hashed password.
+      parameters:
+      - description: Registration payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/httpapi.RegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/httpapi.UserResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httpapi.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/httpapi.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httpapi.ErrorResponse'
+      summary: Register a user
+      tags:
+      - auth
+  /auth/token:
+    post:
+      consumes:
+      - application/json
+      description: Verifies email and password, then returns a signed JWT.
+      parameters:
+      - description: Credential payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/httpapi.TokenRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/httpapi.TokenResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httpapi.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/httpapi.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httpapi.ErrorResponse'
+      summary: Generate an access token
+      tags:
+      - auth
   /health:
     get:
       description: Returns the current health of the service and its dependencies.
@@ -66,14 +266,20 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/domain.Health'
+            $ref: '#/definitions/httpapi.HealthResponse'
         "503":
           description: Service Unavailable
           schema:
-            $ref: '#/definitions/domain.Health'
+            $ref: '#/definitions/httpapi.HealthResponse'
       summary: Health check
       tags:
       - health
 schemes:
 - http
+securityDefinitions:
+  BearerAuth:
+    description: Type "Bearer" followed by a space and the JWT access token.
+    in: header
+    name: Authorization
+    type: apiKey
 swagger: "2.0"

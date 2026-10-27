@@ -2,3 +2,8 @@ bin/
 logs/*.log
 *.log
 .DS_Store
+coverage.out
+
+.env
+.env.*
+!.env.example

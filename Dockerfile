@@ -16,6 +16,11 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
     -ldflags="-s -w -X main.version=${VERSION}" \
     -o /out/boilerplate ./cmd/api
 
+RUN CGO_ENABLED=0 GOOS=linux go build \
+    -trimpath \
+    -ldflags="-s -w" \
+    -o /out/migrate ./cmd/migrate
+
 FROM alpine:3.21
 
 RUN apk add --no-cache ca-certificates \
@@ -25,6 +30,7 @@ RUN apk add --no-cache ca-certificates \
 WORKDIR /app
 
 COPY --from=build /out/boilerplate /app/boilerplate
+COPY --from=build /out/migrate /app/migrate
 
 RUN mkdir -p /app/logs && chown -R app:app /app
 
@@ -37,7 +43,7 @@ ENV PORT=1111 \
 EXPOSE 1111
 VOLUME ["/app/logs"]
 
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
     CMD wget -qO- "http://127.0.0.1:${PORT}/api/v1/health" >/dev/null || exit 1
 
 ENTRYPOINT ["/app/boilerplate"]

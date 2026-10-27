@@ -1,5 +1,7 @@
 .git
 .github
+.env
+.env.*
 bin/
 logs/*.log
 coverage.out

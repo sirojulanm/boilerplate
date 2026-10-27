@@ -1,0 +1,69 @@
+x-app-environment: &app-environment
+  PORT: 1111
+  SERVICE_NAME: ${SERVICE_NAME:-boilerplate}
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  LOG_DIR: /app/logs
+  DB_HOST: postgres
+  DB_PORT: 5432
+  DB_USER: ${DB_USER:-postgres}
+  DB_PASSWORD: ${DB_PASSWORD:-postgres}
+  DB_NAME: ${DB_NAME:-boilerplate}
+  DB_SSLMODE: disable
+  DB_MAX_CONNS: ${DB_MAX_CONNS:-10}
+  DB_CONNECT_TIMEOUT: 5s
+  DB_AUTO_MIGRATE: "false"
+  JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env with openssl rand -hex 32}
+  JWT_ISSUER: ${JWT_ISSUER:-boilerplate}
+  JWT_AUDIENCE: ${JWT_AUDIENCE:-boilerplate-api}
+  JWT_TTL: ${JWT_TTL:-1h}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-boilerplate}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  migrate:
+    build:
+      context: .
+      args:
+        VERSION: ${VERSION:-dev}
+    entrypoint: ["/app/migrate"]
+    command: ["up"]
+    environment: *app-environment
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  app:
+    build:
+      context: .
+      args:
+        VERSION: ${VERSION:-dev}
+    environment: *app-environment
+    ports:
+      - "${PORT:-1111}:1111"
+    volumes:
+      - app-logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  app-logs:

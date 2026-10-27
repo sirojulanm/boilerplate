@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -9,12 +10,15 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+const maxRequestIDLength = 128
+
 // withRequestID reuses an incoming X-Request-ID or generates a new one. The ID
-// is stored on the context so every log entry for the request can be traced.
+// is stored on the context so every request, process, and response log entry
+// can be correlated.
 func withRequestID() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.GetHeader(constant.RequestIDHeader)
-		if id == "" {
+		if id == "" || len(id) > maxRequestIDLength {
 			id = helper.NewRequestID()
 		}
 
@@ -24,10 +28,20 @@ func withRequestID() gin.HandlerFunc {
 	}
 }
 
-// withLogging records every request: method, path, status, latency, client,
-// user agent, and request ID. Entries with status >= 400 are logged at
-// warn/error level. The log call is deferred so a recovered panic is still
-// recorded with its final status code.
+// withBodyLimit rejects bodies larger than limit while they are being read.
+func withBodyLimit(limit int64) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if c.Request.Body != nil {
+			c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, limit)
+		}
+		c.Next()
+	}
+}
+
+// withLogging writes two ordered entries per request: one when the request
+// arrives and one when the response is sent. Process logs from handlers land
+// between them, all sharing the same request_id. The response entry is deferred
+// so a recovered panic still produces a final status/latency record.
 func withLogging(log *logrus.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()
@@ -36,27 +50,47 @@ func withLogging(log *logrus.Logger) gin.HandlerFunc {
 			path = path + "?" + raw
 		}
 
+		requestID := c.GetString(constant.RequestIDKey)
+		baseFields := logrus.Fields{
+			"request_id": requestID,
+			"method":     c.Request.Method,
+			"path":       path,
+			"client_ip":  c.ClientIP(),
+			"user_agent": c.Request.UserAgent(),
+		}
+
+		requestFields := logrus.Fields{"event": constant.LogEventRequest}
+		for key, value := range baseFields {
+			requestFields[key] = value
+		}
+		requestFields["content_length"] = c.Request.ContentLength
+		log.WithFields(requestFields).Info("request received")
+
 		defer func() {
 			status := c.Writer.Status()
-			entry := log.WithFields(logrus.Fields{
-				"request_id": c.GetString(constant.RequestIDKey),
-				"method":     c.Request.Method,
-				"path":       path,
-				"status":     status,
-				"latency_ms": helper.DurationMS(time.Since(start)),
-				"client_ip":  c.ClientIP(),
-				"user_agent": c.Request.UserAgent(),
-			})
 
+			responseFields := logrus.Fields{
+				"event":         constant.LogEventResponse,
+				"request_id":    requestID,
+				"method":        c.Request.Method,
+				"path":          path,
+				"status":        status,
+				"latency_ms":    helper.DurationMS(time.Since(start)),
+				"bytes_written": c.Writer.Size(),
+				"client_ip":     c.ClientIP(),
+				"user_agent":    c.Request.UserAgent(),
+			}
+
+			entry := log.WithFields(responseFields)
 			switch {
 			case len(c.Errors) > 0:
-				entry.WithField("errors", c.Errors.String()).Error("http request")
-			case status >= 500:
-				entry.Error("http request")
-			case status >= 400:
-				entry.Warn("http request")
+				entry.WithField("errors", c.Errors.String()).Error("response sent")
+			case status >= http.StatusInternalServerError:
+				entry.Error("response sent")
+			case status >= http.StatusBadRequest:
+				entry.Warn("response sent")
 			default:
-				entry.Info("http request")
+				entry.Info("response sent")
 			}
 		}()
 

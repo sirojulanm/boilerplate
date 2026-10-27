@@ -4,7 +4,7 @@ VERSION ?= 1.0.0
 SWAG     = go run github.com/swaggo/swag/cmd/swag@v1.16.6
 LDFLAGS  = -s -w -X main.version=$(VERSION)
 
-.PHONY: run build test docs tidy fmt fmt-check lint ci docker docker-run
+.PHONY: run build test docs tidy fmt fmt-check lint ci migrate-up migrate-down migrate-version docker docker-run compose-up compose-down
 
 run:
 	PORT=$(PORT) go run ./cmd/api
@@ -32,8 +32,23 @@ lint:
 
 ci: fmt-check lint test build
 
+migrate-up:
+	go run ./cmd/migrate up
+
+migrate-down:
+	go run ./cmd/migrate down
+
+migrate-version:
+	go run ./cmd/migrate version
+
 docker:
 	docker build --build-arg VERSION=$(VERSION) -t $(APP):$(VERSION) .
 
 docker-run:
 	docker run --rm -p $(PORT):1111 -v "$(APP)-logs:/app/logs" $(APP):$(VERSION)
+
+compose-up:
+	docker compose up --build
+
+compose-down:
+	docker compose down

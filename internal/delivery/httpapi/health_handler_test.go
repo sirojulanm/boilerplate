@@ -31,7 +31,12 @@ func newTestLogger() *logrus.Logger {
 
 func newRouterWithLogger(uc usecase.Health, log *logrus.Logger) *gin.Engine {
 	gin.SetMode(gin.TestMode)
-	return NewRouter(NewHealthHandler(uc, log), log)
+	return NewRouter(Dependencies{
+		Health:        NewHealthHandler(uc, log),
+		Auth:          NewAuthHandler(nil, log),
+		TokenVerifier: stubTokenVerifier{},
+		Log:           log,
+	})
 }
 
 func newTestRouter(uc usecase.Health) *gin.Engine {
@@ -53,12 +58,18 @@ func TestHealthEndpointReturnsOK(t *testing.T) {
 		t.Fatalf("status code = %d, want %d", response.Code, http.StatusOK)
 	}
 
-	var body domain.Health
+	var body HealthResponse
 	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if body.Status != domain.StatusOK {
-		t.Fatalf("body status = %q, want %q", body.Status, domain.StatusOK)
+	if !body.Success {
+		t.Fatal("success must be true")
+	}
+	if body.Data.Status != domain.StatusOK {
+		t.Fatalf("body status = %q, want %q", body.Data.Status, domain.StatusOK)
+	}
+	if body.RequestID == "" || body.RequestID != response.Header().Get(constant.RequestIDHeader) {
+		t.Fatalf("request_id = %q, want header %q", body.RequestID, response.Header().Get(constant.RequestIDHeader))
 	}
 }
 
@@ -137,8 +148,8 @@ func TestUnknownRouteReturnsJSON404(t *testing.T) {
 	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if body.Error != "route not found" {
-		t.Fatalf("error = %q, want route not found", body.Error)
+	if body.Error.Message != "route not found" {
+		t.Fatalf("error = %q, want route not found", body.Error.Message)
 	}
 }
 
@@ -176,11 +187,11 @@ func TestHealthEndpointOverRealServer(t *testing.T) {
 		t.Fatalf("status code = %d, want %d", response.StatusCode, http.StatusOK)
 	}
 
-	var body domain.Health
+	var body HealthResponse
 	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if body.Service != "boilerplate" || body.Status != domain.StatusOK {
+	if body.Data.Service != "boilerplate" || body.Data.Status != domain.StatusOK {
 		t.Fatalf("unexpected response: %+v", body)
 	}
 }
